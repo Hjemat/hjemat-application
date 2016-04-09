@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO.Ports;
+using System.Diagnostics;
 
 namespace HomeAuto
 {
@@ -33,11 +34,28 @@ namespace HomeAuto
             message[2] = dataBytes[1];
             message[3] = dataBytes[0];
 
+            serial.DiscardInBuffer();
             serial.Write(message, 0, 4);
             Console.WriteLine("Written data to device");
 
             byte[] confirmationMessage = new byte[4];
-            serial.ReadExisting;
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
+            bool reading = true;
+            int messageIndex = 0;
+
+            while(reading)
+            {
+                var numBytes = serial.BytesToRead;
+                serial.Read(confirmationMessage, messageIndex, numBytes);
+                messageIndex += numBytes;
+
+                if (messageIndex >= 3)
+                {
+                    reading = false;
+                }
+            }
 
             var expectedHeader = Message.CreateHeader(deviceID, Command.Confirmation);
 
@@ -109,6 +127,8 @@ namespace HomeAuto
 
             SetupSerialPort();
             serialPort.Open();
+            serialPort.DiscardInBuffer();
+            serialPort.DiscardOutBuffer();
 
             devices.Find(x => x.deviceID == 2).SendData(serialPort, dataID: 0x1, data: 0x1);
 
