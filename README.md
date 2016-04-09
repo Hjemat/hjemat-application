@@ -1,6 +1,6 @@
 # HomeAutomationMaster
 Program to manage connected devices.
 
-Requires access to REST server https://github.com/MechaGK/HomeAutomationMasterServer
+[Requires access to REST server(master)](https://github.com/MechaGK/HomeAutomationMasterServer)
 
-Used for school project https://github.com/Rarer/HomeAutomation
+[School project (master)](https://github.com/Rarer/HomeAutomation)
