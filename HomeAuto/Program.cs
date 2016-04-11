@@ -5,6 +5,9 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO.Ports;
 using System.Diagnostics;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Schema;
+using System.IO;
 
 namespace HomeAuto
 {
@@ -13,10 +16,51 @@ namespace HomeAuto
         Error, Request, Send, Ping, Confirmation
     }
 
+    class Config
+    {
+        public class SerialConfig
+        {
+            public string portName = "COM3";
+            public int baudRate = 9600;
+            public Parity parity = Parity.Odd;
+            public StopBits stopBits = StopBits.One;
+            public int dataBits = 8;
+            public Handshake handshake = Handshake.None;
+            public int readTimeout = 2000;
+            
+            public SerialConfig(string portName)
+            {
+                this.portName = portName;
+            }
+        }
+        
+        public string serverUrl;
+        public SerialConfig serialConfig;
+        
+        public Config(string serverUrl, SerialConfig serialConfig)
+        {
+            this.serverUrl = serverUrl;
+            this.serialConfig = serialConfig;
+        }
+        
+    }
+
     class Device
     {
         public byte deviceID;
         public int productID;
+
+        public class DeviceValue 
+        {
+            public byte valueID;
+            public int value;
+
+            public DeviceValue(byte valueID, int value)
+            {
+                this.valueID = valueID;
+                this.value = value;
+            }
+        }
 
         public Device(byte deviceID, int productID)
         {
@@ -103,34 +147,78 @@ namespace HomeAuto
 
     class Program
     {
-        string serverURL = "http://192.168.1.177/api/";
         int updateInterval = 3;
-        static SerialPort serialPort = new SerialPort("COM3");
+        static SerialPort serialPort = new SerialPort();
+        static Config config = new Config("http://127.0.0.1/api/", new Config.SerialConfig("COM3"));
 
         static Device testDevice = new Device(deviceID: 2, productID: 10);
 
         static List<Device> devices = new List<Device>();
 
-        static void SetupSerialPort()
+        static void SetupSerialPort(Config.SerialConfig serialConfig)
         {
-            serialPort.BaudRate = 9600;
-            serialPort.Parity = Parity.Odd;
-            serialPort.StopBits = StopBits.One;
-            serialPort.DataBits = 8;
-            serialPort.Handshake = Handshake.None;
-            serialPort.ReadTimeout = 2000;
+            serialPort.PortName     = serialConfig.portName;
+            serialPort.BaudRate     = serialConfig.baudRate;
+            serialPort.Parity       = serialConfig.parity;
+            serialPort.StopBits     = serialConfig.stopBits;
+            serialPort.DataBits     = serialConfig.dataBits;
+            serialPort.Handshake    = serialConfig.handshake;
+            serialPort.ReadTimeout  = serialConfig.readTimeout;
         }
 
         static void Main(string[] args)
         {
+            if (File.Exists("settings.json"))
+            {
+                Console.WriteLine("Setting up according to settings.json...");
+                var settingsFile = File.ReadAllText("settings.json");
+                
+                config = JsonConvert.DeserializeObject<Config>(settingsFile);
+                
+                if (config == null)
+                {
+                    Console.WriteLine("Error loading settings file");
+                    return;
+                }
+                
+            }
+            else
+            {
+                Console.WriteLine("Settings file not found. Creating standard settings file");
+                File.WriteAllText("settings.json", JsonConvert.SerializeObject(config, Formatting.Indented));
+                
+                Console.WriteLine("Settings file created, needs configuration before using program");
+                
+                return;
+            }
+            
             devices.Add(testDevice);
+            
+            if (config.serialConfig == null)
+            {
+                Console.WriteLine("Error getting SerialConfig from settings");
+                return;
+            }
 
-            SetupSerialPort();
-            serialPort.Open();
+            SetupSerialPort(config.serialConfig);
+            
+            try
+            {
+                serialPort.Open();
+            }
+            catch (System.Exception)
+            {
+                Console.WriteLine($"Error opening serial port. Make sure device is connected and that {serialPort.PortName} is the correct port");
+                return;
+            }
+            
             serialPort.DiscardInBuffer();
             serialPort.DiscardOutBuffer();
 
             devices.Find(x => x.deviceID == 2).SendData(serialPort, dataID: 0x1, data: 0x1);
+
+            
+			Console.WriteLine(JsonConvert.SerializeObject(config));
 
             serialPort.Close();
 
