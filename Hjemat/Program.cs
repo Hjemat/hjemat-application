@@ -5,7 +5,7 @@ using System.Diagnostics;
 using Newtonsoft.Json;
 using System.IO;
 
-namespace HomeAuto
+namespace Hjemat
 {
     enum Command
     {
@@ -169,9 +169,10 @@ namespace HomeAuto
         {
             if (File.Exists("settings.json"))
             {
-                Console.WriteLine("Setting up according to settings.json...");
+                Console.WriteLine("Reading settings file...");
                 var settingsFile = File.ReadAllText("settings.json");
                 
+                Console.WriteLine("Setting up according to settings.json...");
                 config = JsonConvert.DeserializeObject<Config>(settingsFile);
                 
                 if (config == null)
