@@ -219,6 +219,7 @@ namespace Hjemat
             var running = true;
             while (running)
             {
+                Console.WriteLine("0 or 1 to turn light off or on. q to exit program.");
                 var input = Console.ReadLine();
                 
                 switch (input.ToLower())
