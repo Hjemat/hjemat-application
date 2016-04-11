@@ -88,6 +88,9 @@ namespace HomeAuto
             while(reading)
             {
                 var numBytes = serial.BytesToRead;
+                if (numBytes < 1)
+                    continue;
+                    
                 serial.Read(confirmationMessage, messageIndex, numBytes);
                 messageIndex += numBytes;
 
@@ -205,17 +208,38 @@ namespace HomeAuto
             catch (System.Exception)
             {
                 Console.WriteLine($"Error opening serial port. Make sure device is connected and that {serialPort.PortName} is the correct port");
+                
                 return;
             }
             
             serialPort.DiscardInBuffer();
             serialPort.DiscardOutBuffer();
 
-            devices.Find(x => x.deviceID == 2).SendData(serialPort, dataID: 0x1, data: 0x1);
-
-            
-			Console.WriteLine(JsonConvert.SerializeObject(config));
-
+            var running = true;
+            while (running)
+            {
+                var input = Console.ReadLine();
+                
+                switch (input.ToLower())
+                {
+                    case "0":
+                        devices.Find(x => x.deviceID == 2).SendData(serialPort, dataID: 0x1, data: 0x0);
+                        Console.WriteLine("Turned off light");
+                        break;
+                    case "1":
+                        devices.Find(x => x.deviceID == 2).SendData(serialPort, dataID: 0x1, data: 0x1);
+                        Console.WriteLine("Turned on light");
+                        break;
+                    case "q":
+                        running = false;
+                        Console.Write("Enter to exit");
+                        break;
+                    default:
+                        Console.WriteLine("Invalid input");
+                        break;
+                }
+            }
+           
             serialPort.Close();
 
             Console.ReadLine();
