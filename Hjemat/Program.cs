@@ -14,7 +14,8 @@ namespace Hjemat
         FromDevice = 2,
         Ping = 4,
         Send = 5,
-        Confirmation = 6
+        Confirmation = 6,
+        Pingback = 7
     }
 
     class Config
@@ -51,7 +52,6 @@ namespace Hjemat
         int updateInterval = 3;
         static SerialPort serialPort = new SerialPort();
         static Config config = new Config("http://127.0.0.1/api/", new Config.SerialConfig("COM3"));
-
         
 
         static List<Device> devices = new List<Device>();
@@ -65,12 +65,14 @@ namespace Hjemat
             serialPort.DataBits     = serialConfig.dataBits;
             serialPort.Handshake    = serialConfig.handshake;
             serialPort.ReadTimeout  = serialConfig.readTimeout;
+
+            Message.serialPort = serialPort;
         }
 
-        static void Main(string[] args)
+        static Config LoadSettings()
         {
-            Device testDevice = new Device(deviceID: 2, productID: 10, serialPort: serialPort);
-            
+            Config config = null;
+
             if (File.Exists("settings.json"))
             {
                 Console.WriteLine("Reading settings file...");
@@ -79,12 +81,6 @@ namespace Hjemat
                 Console.WriteLine("Setting up according to settings.json...");
                 config = JsonConvert.DeserializeObject<Config>(settingsFile);
                 
-                if (config == null)
-                {
-                    Console.WriteLine("Error loading settings file");
-                    return;
-                }
-                
             }
             else
             {
@@ -92,12 +88,61 @@ namespace Hjemat
                 File.WriteAllText("settings.json", JsonConvert.SerializeObject(config, Formatting.Indented));
                 
                 Console.WriteLine("Settings file created, needs configuration before using program");
+            }
+
+            return config;
+        }
+        
+        static void ScanForDevices()
+        {
+            for (byte i = 0x01; i <= 0x20; i++)
+            {
+                Console.Write($"\rScanning for devices... {i}/32");
                 
+                var ping = Message.CreatePing(i);
+                ping.Send();
+
+                try
+                {
+                    var response = Message.Read();
+
+                    if (response.GetHeader() == Message.CreateHeader(i, Command.Pingback))
+                    {
+                        var productID = response.GetDataBytes();
+                        productID = new byte[] { productID[2], productID[1], productID[0], 0 };
+
+                        var device = new Device(i, BitConverter.ToInt32(productID, 0), serialPort);
+                        devices.Add(device);
+
+                    }
+                }
+                catch (System.TimeoutException)
+                {
+                    continue;
+                }
+
+                
+            }
+
+            Console.WriteLine("");
+            
+            foreach( var device in devices)
+            {
+                Console.WriteLine($"Found device with ID {device.deviceID} and product ID {device.productID}");
+            }
+        }
+        
+
+        static void Main(string[] args)
+        {
+            config = LoadSettings();
+            
+            if (config == null)
+            {
+                Console.WriteLine("Failed to load settings file");
                 return;
             }
-            
-            devices.Add(testDevice);
-            
+
             if (config.serialConfig == null)
             {
                 Console.WriteLine("Error getting SerialConfig from settings");
@@ -116,38 +161,12 @@ namespace Hjemat
                 
                 return;
             }
-            
-            serialPort.DiscardInBuffer();
-            serialPort.DiscardOutBuffer();
 
-            var running = true;
-            while (running)
-            {
-                Console.WriteLine("0 or 1 to turn light off or on. q to exit program.");
-                var input = Console.ReadLine();
-                
-                switch (input.ToLower())
-                {
-                    case "0":
-                        devices.Find(x => x.deviceID == 2).SendData(dataID: 0x1, data: 0x0);
-                        Console.WriteLine("Turned off light");
-                        break;
-                    case "1":
-                        devices.Find(x => x.deviceID == 2).SendData(dataID: 0x1, data: 0x1);
-                        Console.WriteLine("Turned on light");
-                        break;
-                    case "q":
-                        running = false;
-                        Console.Write("Enter to exit");
-                        break;
-                    default:
-                        Console.WriteLine("Invalid input");
-                        break;
-                }
-            }
-           
+            ScanForDevices();
+
             serialPort.Close();
 
+            Console.Write("Enter to end program...");
             Console.ReadLine();
         }
     }
