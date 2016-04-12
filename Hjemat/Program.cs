@@ -72,11 +72,22 @@ namespace Hjemat
         static Config LoadSettings()
         {
             Config config = null;
+            
+            var settingsFolderPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "hjemat-app");
 
-            if (File.Exists("settings.json"))
+            var filePath = Path.Combine(
+                settingsFolderPath,
+                "settings.json");
+
+            Directory.CreateDirectory(settingsFolderPath);
+            Console.WriteLine(filePath);
+
+            if (File.Exists(filePath))
             {
                 Console.WriteLine("Reading settings file...");
-                var settingsFile = File.ReadAllText("settings.json");
+                var settingsFile = File.ReadAllText(filePath);
                 
                 Console.WriteLine("Setting up according to settings.json...");
                 config = JsonConvert.DeserializeObject<Config>(settingsFile);
@@ -85,9 +96,9 @@ namespace Hjemat
             else
             {
                 Console.WriteLine("Settings file not found. Creating standard settings file");
-                File.WriteAllText("settings.json", JsonConvert.SerializeObject(config, Formatting.Indented));
+                File.WriteAllText(filePath, JsonConvert.SerializeObject(config, Formatting.Indented));
                 
-                Console.WriteLine("Settings file created, needs configuration before using program");
+                Console.WriteLine($"Settings file created, needs configuration before using program.\nFile path: {filePath}");
             }
 
             return config;
