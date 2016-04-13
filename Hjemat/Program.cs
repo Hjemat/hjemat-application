@@ -4,18 +4,18 @@ using System.IO.Ports;
 using System.Diagnostics;
 using Newtonsoft.Json;
 using System.IO;
+using RestSharp;
 
 namespace Hjemat
 {
     enum Command
     {
         Error = 0,
-        Request = 1,
-        FromDevice = 2,
-        Ping = 4,
-        Send = 5,
-        Confirmation = 6,
-        Pingback = 7
+        Ping = 1,
+        Pingback = 2,
+        Get = 3,
+        Set = 4,
+        Return = 5,
     }
 
     class Config
@@ -36,10 +36,10 @@ namespace Hjemat
             }
         }
         
-        public string serverUrl;
+        public Uri serverUrl;
         public SerialConfig serialConfig;
         
-        public Config(string serverUrl, SerialConfig serialConfig)
+        public Config(Uri serverUrl, SerialConfig serialConfig)
         {
             this.serverUrl = serverUrl;
             this.serialConfig = serialConfig;
@@ -49,9 +49,9 @@ namespace Hjemat
 
     class Program
     {
-        int updateInterval = 3;
+        int updateInterval = 1;
         static SerialPort serialPort = new SerialPort();
-        static Config config = new Config("http://127.0.0.1/api/", new Config.SerialConfig("COM3"));
+        static Config config = new Config(new Uri("http://127.0.0.1/api/"), new Config.SerialConfig("COM3"));
         
 
         static List<Device> devices = new List<Device>();
@@ -67,11 +67,12 @@ namespace Hjemat
             serialPort.ReadTimeout  = serialConfig.readTimeout;
 
             Message.serialPort = serialPort;
+            Device.serialPort = serialPort;
         }
 
         static Config LoadSettings()
         {
-            Config config = null;
+            Config config = new Config(new Uri("http://127.0.0.1/api/"), new Config.SerialConfig("COM3"));
             
             var settingsFolderPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -99,6 +100,8 @@ namespace Hjemat
                 File.WriteAllText(filePath, JsonConvert.SerializeObject(config, Formatting.Indented));
                 
                 Console.WriteLine($"Settings file created, needs configuration before using program.\nFile path: {filePath}");
+
+                throw new System.Exception("Halt program to let user edit settings");
             }
 
             return config;
@@ -109,7 +112,10 @@ namespace Hjemat
             for (byte i = 0x01; i <= 0x20; i++)
             {
                 Console.Write($"\rScanning for devices... {i}/32");
-                
+
+                serialPort.DiscardInBuffer();
+                serialPort.DiscardOutBuffer();
+
                 var ping = Message.CreatePing(i);
                 ping.Send();
 
@@ -122,9 +128,10 @@ namespace Hjemat
                         var productID = response.GetDataBytes();
                         productID = new byte[] { productID[2], productID[1], productID[0], 0 };
 
-                        var device = new Device(i, BitConverter.ToInt32(productID, 0), serialPort);
+                        var device = new Device(i, BitConverter.ToInt32(productID, 0));
                         devices.Add(device);
-
+                        
+                        Console.WriteLine($"\rFound device with ID {device.deviceID} and product ID {device.productID}");
                     }
                 }
                 catch (System.TimeoutException)
@@ -135,7 +142,7 @@ namespace Hjemat
                 
             }
 
-            Console.WriteLine("");
+            Console.WriteLine("\n");
             
             foreach( var device in devices)
             {
@@ -146,7 +153,15 @@ namespace Hjemat
 
         static void Main(string[] args)
         {
-            config = LoadSettings();
+            try
+            {
+                config = LoadSettings();
+            }
+            catch (System.Exception)
+            {
+                return;
+            }
+            
             
             if (config == null)
             {
@@ -173,7 +188,59 @@ namespace Hjemat
                 return;
             }
 
+            Console.WriteLine("Giving port time to open...");
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
+            while (stopwatch.ElapsedMilliseconds < 3000)
+            {
+                continue;
+            }
+            stopwatch.Stop();
+
+            Console.WriteLine("");
+
             ScanForDevices();
+
+            var client = new RestClient();
+            client.BaseUrl = config.serverUrl;
+
+            var request = new RestRequest();
+            request.Resource = "devices";
+
+            var response = client.Execute(request);
+
+            var devicesFromServer = JsonConvert.DeserializeObject < List<Device>> (response.Content);
+
+            if (response.ErrorException != null)
+            {
+                const string message = "Error retrieving response.  Check inner details for more info.";
+                var twilioException = new ApplicationException(message, response.ErrorException);
+                throw twilioException;
+            }
+
+            Console.WriteLine(devicesFromServer.Count);
+            
+            foreach(var device in devices)
+            {
+                Console.WriteLine(JsonConvert.SerializeObject(device, Formatting.Indented));
+            }
+            
+            /*
+            foreach(var device in devicesFromServer)
+            {
+                var editRequest = new RestRequest($"devices/{device.deviceID}");
+
+                if (devices.Find(x => x.deviceID == device.deviceID) == null)
+                {
+                    editRequest.Method = Method.DELETE;
+                }
+                else
+                {
+                    editRequest.Method = Method.PUT;
+                    JsonConvert.SerializeObject<Device>(devices.Find(x => x.deviceID == devicesFromServer));
+                }
+            }*/
+
 
             serialPort.Close();
 

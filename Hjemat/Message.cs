@@ -91,14 +91,26 @@ namespace Hjemat
             {
                 if (stopwatch.ElapsedMilliseconds > serialPort.ReadTimeout)
                 {
+                    stopwatch.Stop();
                     throw new System.TimeoutException();
                 }
 
                 var numBytes = serialPort.BytesToRead;
+                
                 if (numBytes < 1)
                     continue;
 
-                serialPort.Read(message, messageIndex, numBytes);
+                try
+                {
+                    serialPort.Read(message, messageIndex, numBytes);
+                }
+                catch (System.Exception)
+                {
+                    Console.WriteLine("ReadTimeout");
+                    throw;
+                }
+
+                
                 messageIndex += numBytes;
 
                 if (messageIndex >= 3)
