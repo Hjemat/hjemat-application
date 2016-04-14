@@ -29,22 +29,22 @@ namespace Hjemat
             public int dataBits = 8;
             public Handshake handshake = Handshake.None;
             public int readTimeout = 2000;
-            
+
             public SerialConfig(string portName)
             {
                 this.portName = portName;
             }
         }
-        
+
         public Uri serverUrl;
         public SerialConfig serialConfig;
-        
+
         public Config(Uri serverUrl, SerialConfig serialConfig)
         {
             this.serverUrl = serverUrl;
             this.serialConfig = serialConfig;
         }
-        
+
     }
 
     class Program
@@ -52,19 +52,19 @@ namespace Hjemat
         int updateInterval = 1;
         static SerialPort serialPort = new SerialPort();
         static Config config = new Config(new Uri("http://127.0.0.1/api/"), new Config.SerialConfig("COM3"));
-        
+
 
         static List<Device> devices = new List<Device>();
 
         static void SetupSerialPort(Config.SerialConfig serialConfig)
         {
-            serialPort.PortName     = serialConfig.portName;
-            serialPort.BaudRate     = serialConfig.baudRate;
-            serialPort.Parity       = serialConfig.parity;
-            serialPort.StopBits     = serialConfig.stopBits;
-            serialPort.DataBits     = serialConfig.dataBits;
-            serialPort.Handshake    = serialConfig.handshake;
-            serialPort.ReadTimeout  = serialConfig.readTimeout;
+            serialPort.PortName = serialConfig.portName;
+            serialPort.BaudRate = serialConfig.baudRate;
+            serialPort.Parity = serialConfig.parity;
+            serialPort.StopBits = serialConfig.stopBits;
+            serialPort.DataBits = serialConfig.dataBits;
+            serialPort.Handshake = serialConfig.handshake;
+            serialPort.ReadTimeout = serialConfig.readTimeout;
 
             Message.serialPort = serialPort;
             Device.serialPort = serialPort;
@@ -73,7 +73,7 @@ namespace Hjemat
         static Config LoadSettings()
         {
             Config config = new Config(new Uri("http://127.0.0.1/api/"), new Config.SerialConfig("COM3"));
-            
+
             var settingsFolderPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "hjemat-app");
@@ -89,16 +89,16 @@ namespace Hjemat
             {
                 Console.WriteLine("Reading settings file...");
                 var settingsFile = File.ReadAllText(filePath);
-                
+
                 Console.WriteLine("Setting up according to settings.json...");
                 config = JsonConvert.DeserializeObject<Config>(settingsFile);
-                
+
             }
             else
             {
                 Console.WriteLine("Settings file not found. Creating standard settings file");
                 File.WriteAllText(filePath, JsonConvert.SerializeObject(config, Formatting.Indented));
-                
+
                 Console.WriteLine($"Settings file created, needs configuration before using program.\nFile path: {filePath}");
 
                 throw new System.Exception("Halt program to let user edit settings");
@@ -106,7 +106,7 @@ namespace Hjemat
 
             return config;
         }
-        
+
         static void ScanForDevices()
         {
             for (byte i = 0x01; i <= 0x20; i++)
@@ -130,7 +130,7 @@ namespace Hjemat
 
                         var device = new Device(i, BitConverter.ToInt32(productID, 0));
                         devices.Add(device);
-                        
+
                         Console.WriteLine($"\rFound device with ID {device.deviceID} and product ID {device.productID}");
                     }
                 }
@@ -139,17 +139,17 @@ namespace Hjemat
                     continue;
                 }
 
-                
+
             }
 
             Console.WriteLine("\n");
-            
-            foreach( var device in devices)
+
+            foreach (var device in devices)
             {
                 Console.WriteLine($"Found device with ID {device.deviceID} and product ID {device.productID}");
             }
         }
-        
+
 
         static void Main(string[] args)
         {
@@ -161,8 +161,8 @@ namespace Hjemat
             {
                 return;
             }
-            
-            
+
+
             if (config == null)
             {
                 Console.WriteLine("Failed to load settings file");
@@ -176,7 +176,7 @@ namespace Hjemat
             }
 
             SetupSerialPort(config.serialConfig);
-            
+
             try
             {
                 serialPort.Open();
@@ -184,7 +184,7 @@ namespace Hjemat
             catch (System.Exception)
             {
                 Console.WriteLine($"Error opening serial port. Make sure device is connected and that {serialPort.PortName} is the correct port");
-                
+
                 return;
             }
 
@@ -209,8 +209,6 @@ namespace Hjemat
 
             var response = client.Execute(request);
 
-            var devicesFromServer = JsonConvert.DeserializeObject < List<Device>> (response.Content);
-
             if (response.ErrorException != null)
             {
                 const string message = "Error retrieving response.  Check inner details for more info.";
@@ -218,13 +216,15 @@ namespace Hjemat
                 throw twilioException;
             }
 
+            var devicesFromServer = JsonConvert.DeserializeObject<List<Device>>(response.Content);
+
             Console.WriteLine(devicesFromServer.Count);
-            
-            foreach(var device in devices)
+
+            foreach (var device in devices)
             {
                 Console.WriteLine(JsonConvert.SerializeObject(device, Formatting.Indented));
             }
-            
+
             /*
             foreach(var device in devicesFromServer)
             {
