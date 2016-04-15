@@ -53,8 +53,12 @@ namespace Hjemat
         static SerialPort serialPort = new SerialPort();
         static Config config = new Config(new Uri("http://127.0.0.1/api/"), new Config.SerialConfig("COM3"));
 
-
-        static List<Device> devices = new List<Device>();
+        static Dictionary<byte, Device> devices = new Dictionary<byte, Device>();
+        static Dictionary<int, Product> products = new Dictionary<int, Product>();
+        
+        static string configFolderPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "hjemat-app");
 
         static void SetupSerialPort(Config.SerialConfig serialConfig)
         {
@@ -74,16 +78,9 @@ namespace Hjemat
         {
             Config config = new Config(new Uri("http://127.0.0.1/api/"), new Config.SerialConfig("COM3"));
 
-            var settingsFolderPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "hjemat-app");
-
             var filePath = Path.Combine(
-                settingsFolderPath,
+                configFolderPath,
                 "settings.json");
-
-            Directory.CreateDirectory(settingsFolderPath);
-            Console.WriteLine(filePath);
 
             if (File.Exists(filePath))
             {
@@ -105,6 +102,34 @@ namespace Hjemat
             }
 
             return config;
+        }
+        
+        static Dictionary<int, Product> GetProductsDict()
+        {
+            var products = new Dictionary<int, Product>();
+            var productList = new List<Product>();
+
+            var filePath = Path.Combine(
+                configFolderPath,
+                "products.json");
+                
+
+            if (File.Exists(filePath))
+            {
+                Console.WriteLine("Reading products file...");
+                var settingsFile = File.ReadAllText(filePath);
+
+                Console.WriteLine("Setting up according to products.json...");
+                productList = JsonConvert.DeserializeObject<List<Product>>(settingsFile);
+                
+                foreach(var product in productList)
+                {
+                    products.Add(product.productID, product);
+                }
+
+            }
+            
+            return products;
         }
 
         static void ScanForDevices()
@@ -129,7 +154,7 @@ namespace Hjemat
                         productID = new byte[] { productID[2], productID[1], productID[0], 0 };
 
                         var device = new Device(i, BitConverter.ToInt32(productID, 0));
-                        devices.Add(device);
+                        devices.Add(device.deviceID, device);
 
                         Console.WriteLine($"\rFound device with ID {device.deviceID} and product ID {device.productID}");
                     }
@@ -144,17 +169,51 @@ namespace Hjemat
 
             Console.WriteLine("\n");
 
-            foreach (var device in devices)
+            foreach (var device in devices.Values)
             {
                 Console.WriteLine($"Found device with ID {device.deviceID} and product ID {device.productID}");
             }
         }
+        
+        static void SetupDevices()
+        {
+            foreach(var device in devices.Values)
+            {
+                Product product = null;
 
+                if (products.ContainsKey(device.productID))
+                {
+                    product = products[device.productID];
+                }
+                
+                if (product == null)
+                {
+                    //TODO: Update product list if not already done, and check for product again
+
+                    Console.WriteLine($"Couldn't find product of device {device.deviceID}, product id: {device.productID}");
+                }
+                else
+                {
+                    device.values = new Dictionary<byte, short>();
+                    
+                    foreach(var productValueID in product.values.Keys)
+                    {
+                        device.values.Add(productValueID, device.GetValue(productValueID));
+                    }
+                    
+                    Console.WriteLine($"Device {device.deviceID}, a {product.name}, has been set up");
+                }
+            }
+            
+        }
+
+        
 
         static void Main(string[] args)
-        {
+        {   
             try
             {
+                Directory.CreateDirectory(configFolderPath);
                 config = LoadSettings();
             }
             catch (System.Exception)
@@ -162,6 +221,8 @@ namespace Hjemat
                 return;
             }
 
+            products = GetProductsDict();
+            Console.WriteLine(JsonConvert.SerializeObject(products, Formatting.Indented));
 
             if (config == null)
             {
@@ -201,19 +262,20 @@ namespace Hjemat
 
             ScanForDevices();
 
+            SetupDevices();
+
             var client = new RestClient();
             client.BaseUrl = config.serverUrl;
 
             var request = new RestRequest();
             request.Resource = "devices";
 
-            var response = client.Execute(request);
+           /* var response = client.Execute(request);
 
             if (response.ErrorException != null)
             {
                 const string message = "Error retrieving response.  Check inner details for more info.";
-                var twilioException = new ApplicationException(message, response.ErrorException);
-                throw twilioException;
+                throw new ApplicationException(message, response.ErrorException);
             }
 
             var devicesFromServer = JsonConvert.DeserializeObject<List<Device>>(response.Content);
@@ -224,23 +286,25 @@ namespace Hjemat
             {
                 Console.WriteLine(JsonConvert.SerializeObject(device, Formatting.Indented));
             }
-
-            /*
-            foreach(var device in devicesFromServer)
+            
+            for (int i = 1; i < 0x20; i++)
             {
-                var editRequest = new RestRequest($"devices/{device.deviceID}");
+                var remoteDevice = devicesFromServer.Find(x => x.deviceID == i);
+                var localDevice = devices[i];
 
-                if (devices.Find(x => x.deviceID == device.deviceID) == null)
+                if (remoteDevice == null && localDevice != null)
                 {
-                    editRequest.Method = Method.DELETE;
+                    // POST device to server
                 }
-                else
+                else if (remoteDevice != null && localDevice != null)
                 {
-                    editRequest.Method = Method.PUT;
-                    JsonConvert.SerializeObject<Device>(devices.Find(x => x.deviceID == devicesFromServer));
+                    // PUT device from server
                 }
-            }*/
-
+                else if (remoteDevice != null && localDevice == null)
+                {
+                    // DELETE device from server
+                }
+            } */
 
             serialPort.Close();
 

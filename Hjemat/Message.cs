@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO.Ports;
-using System.Linq;
 
 namespace Hjemat
 {
@@ -63,6 +62,11 @@ namespace Hjemat
         public byte[] GetDataBytes()
         {
             return new byte[3] { bytes[1], bytes[2], bytes[3] };
+        }
+        
+        public short GetShortData()
+        {
+            return BitConverter.ToInt16(new byte[] { bytes[3], bytes[2] }, 0);
         }
 
         public static bool Send(byte[] bytes)

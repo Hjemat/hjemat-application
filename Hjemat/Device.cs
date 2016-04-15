@@ -11,40 +11,28 @@ namespace Hjemat
     {
         public byte deviceID;
         public int productID;
-        public List<DeviceValue> values;
+        public Dictionary<byte, short> values;
 
         public static SerialPort serialPort;
 
-        public class DeviceValue
-        {
-            public byte id;
-            public int value;
-
-            public DeviceValue(byte id, int value)
-            {
-                this.id = id;
-                this.value = value;
-            }
-        }
-
-        public Device(byte deviceID = 0x0, int productID = 0x0, List<DeviceValue> values = null)
+        public Device(byte deviceID = 0x0, int productID = 0x0, Dictionary<byte, Int16> values = null)
         {
             this.deviceID = deviceID;
             this.productID = productID;
            
-            this.values = values ?? new List<DeviceValue>();
+            this.values = values ?? new Dictionary<byte, Int16>();
         }
 
         public bool SendMessage(Command command, byte byte1, byte byte2, byte byte3)
         {
-            byte[] message = new byte[4];
+            byte?[] data = new byte?[3];
 
-            message[0] = Message.CreateHeader(deviceID, command);
-            message[1] = byte1;
-            message[2] = byte2;
-            message[3] = byte3;
+            data[0] = byte1;
+            data[1] = byte2;
+            data[2] = byte3;
 
-            serialPort.Write(message, 0, 4);
+            var message = new Message(deviceID, command, data);
+            message.Send();
 
             return true;
         }
@@ -62,7 +50,23 @@ namespace Hjemat
 
             return SendMessage(command, dataBytes[2], dataBytes[1], dataBytes[0]);
         }
+        
+        public short GetValue(byte dataID)
+        {
+            SendMessage(Command.Get, dataID, 0);
 
+            var response = Message.Read();
+
+            var expectedHeader = Message.CreateHeader(deviceID, Command.Return);
+
+            if (response.GetHeader() == expectedHeader && response.bytes[1] == dataID)
+            {
+                return response.GetShortData();
+            }
+
+            throw new System.Exception("");
+        }
+/*
         public bool SendData(byte dataID, int data)
         {
             SendMessage(Command.Set, dataID, data);
@@ -109,5 +113,6 @@ namespace Hjemat
                 return false;
             }
         }
+        */
     }
 }
