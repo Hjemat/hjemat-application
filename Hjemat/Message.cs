@@ -1,11 +1,15 @@
 using System;
 using System.Diagnostics;
 using System.IO.Ports;
+using Raspberry.IO.GeneralPurpose;
 
 namespace Hjemat
 {
     class Message
     {
+        public static OutputPinConfiguration rwPinConfig;
+        public static GpioConnection rwPinConnection;
+
         public static SerialPort serialPort;
 
         public static byte CreateHeader(byte deviceID, Command command)
@@ -71,7 +75,13 @@ namespace Hjemat
 
         public static bool Send(byte[] bytes)
         {
+            rwPinConnection.Toggle(rwPinConfig);
+            Program.Delay(5);
+
             serialPort.Write(bytes, 0, 4);
+
+            Program.Delay(5);
+            rwPinConnection.Toggle(rwPinConfig);
 
             return true;
         }
