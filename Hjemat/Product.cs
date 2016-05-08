@@ -4,8 +4,10 @@ namespace Hjemat
 {
     public class ProductValue
     {
+        public byte id;
         public string name;
         public string description;
+        public string type;
 
         public ProductValue()
         {
@@ -15,18 +17,18 @@ namespace Hjemat
 
     public class Product
     {
-        public int productID;
+        public int id;
         public string name;
         public string description;
-        public Dictionary<byte, ProductValue> values = new Dictionary<byte, ProductValue>();
+        public List<ProductValue> values = new List<ProductValue>();
 
-        public Product(int productID = 0, string name = "ProductName",
-					   string description = "A product", Dictionary<byte, ProductValue> values = null)
+        public Product(int id = 0, string name = "ProductName",
+					   string description = "A product", List<ProductValue> values = null)
         {
-            this.productID = productID;
+            this.id = id;
             this.name = name;
             this.description = description;
-            this.values = values ?? new Dictionary<byte, ProductValue>();
+            this.values = values ?? new List<ProductValue>();
         }
     }
 }

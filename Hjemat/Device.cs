@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace Hjemat
 {
-    class Device
+    public class Device
     {
         public byte deviceID;
         public int productID;
@@ -20,7 +20,7 @@ namespace Hjemat
             this.values = values ?? new Dictionary<byte, Int16>();
         }
 
-        public bool SendMessage(Command command, byte byte1, byte byte2, byte byte3)
+        public bool SendMessage(CommandID command, byte byte1, byte byte2, byte byte3)
         {
             byte?[] data = new byte?[3];
 
@@ -34,14 +34,14 @@ namespace Hjemat
             return true;
         }
 
-        public bool SendMessage(Command command, byte byte1, int data)
+        public bool SendMessage(CommandID command, byte byte1, int data)
         {
             var dataBytes = BitConverter.GetBytes(data);
 
             return SendMessage(command, byte1, dataBytes[1], dataBytes[0]);
         }
 
-        public bool SendMessage(Command command, int data)
+        public bool SendMessage(CommandID command, int data)
         {
             var dataBytes = BitConverter.GetBytes(data);
 
@@ -50,11 +50,11 @@ namespace Hjemat
         
         public short GetValue(byte dataID)
         {
-            SendMessage(Command.Get, dataID, 0);
+            SendMessage(CommandID.Get, dataID, 0);
 
             var response = Message.Read();
 
-            var expectedHeader = Message.CreateHeader(deviceID, Command.Return);
+            var expectedHeader = Message.CreateHeader(deviceID, CommandID.Return);
 
             if (response.GetHeader() == expectedHeader && response.bytes[1] == dataID)
             {

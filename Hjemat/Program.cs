@@ -6,11 +6,13 @@ using Newtonsoft.Json;
 using System.IO;
 using RestSharp;
 using Raspberry.IO.GeneralPurpose;
-using Raspberry.IO.GeneralPurpose.Behaviors;
+using WebSocketSharp;
+using WebSocketSharp.Server;
+using System.Linq;
 
 namespace Hjemat
 {
-    enum Command
+    public enum CommandID
     {
         Error = 0,
         Ping = 1,
@@ -62,6 +64,12 @@ namespace Hjemat
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "hjemat-app");
 
+        static RestServer restServer;
+
+        //public static List<Command> commands = new List<Command>();
+
+        public static Dictionary<byte, Device> Devices { get; } = devices;
+
         static void SetupSerialPort(Config.SerialConfig serialConfig)
         {
             serialPort.PortName = serialConfig.portName;
@@ -100,6 +108,8 @@ namespace Hjemat
                 Console.WriteLine("Reading settings file...");
                 var settingsFile = File.ReadAllText(filePath);
 
+                Console.WriteLine(settingsFile);
+
                 Console.WriteLine("Setting up according to settings.json...");
                 config = JsonConvert.DeserializeObject<Config>(settingsFile);
 
@@ -137,7 +147,7 @@ namespace Hjemat
 
                 foreach (var product in productList)
                 {
-                    products.Add(product.productID, product);
+                    products.Add(product.id, product);
                 }
 
             }
@@ -161,7 +171,7 @@ namespace Hjemat
                 {
                     var response = Message.Read();
 
-                    if (response.GetHeader() == Message.CreateHeader(i, Command.Pingback))
+                    if (response.GetHeader() == Message.CreateHeader(i, CommandID.Pingback))
                     {
                         var productID = response.GetDataBytes();
                         productID = new byte[] { productID[2], productID[1], productID[0], 0 };
@@ -171,7 +181,7 @@ namespace Hjemat
 
                         Console.WriteLine($"\rFound device with ID {device.deviceID} and product ID {device.productID}");
                     }
-                    else 
+                    else
                     {
                         Console.WriteLine($"Got message {response.GetHeader()}");
                     }
@@ -213,9 +223,9 @@ namespace Hjemat
                 {
                     device.values = new Dictionary<byte, short>();
 
-                    foreach (var productValueID in product.values.Keys)
+                    foreach (var productValue in product.values)
                     {
-                        device.values.Add(productValueID, device.GetValue(productValueID));
+                        device.values.Add(productValue.id, device.GetValue(productValue.id));
                     }
 
                     Console.WriteLine($"Device {device.deviceID}, a {product.name}, has been set up");
@@ -234,7 +244,7 @@ namespace Hjemat
                 continue;
             }
             delayStopwatch.Stop();*/
-            
+
             System.Threading.Thread.Sleep(miliseconds);
         }
 
@@ -248,12 +258,16 @@ namespace Hjemat
 
             Message.rwPinConfig = ConnectorPin.P1Pin11.Output();
             Message.rwPinConnection = new GpioConnection(Message.rwPinConfig);
-            
+
+            configFolderPath = args[0];
+
             //Message.rwPinConnection.Toggle(Message.rwPinConfig);
 
             try
             {
-                Directory.CreateDirectory(args[0] ?? configFolderPath);
+                if (!File.Exists(configFolderPath))
+                    Directory.CreateDirectory(args[0] ?? configFolderPath);
+
                 config = LoadSettings(args[0]);
             }
             catch (System.Exception)
@@ -293,7 +307,7 @@ namespace Hjemat
             var stopwatch = new Stopwatch();
 
             var testWatch = new Stopwatch();
-            Delay(200);
+            Delay(400);
 
             Console.WriteLine("");
 
@@ -301,55 +315,110 @@ namespace Hjemat
 
             SetupDevices();
 
-            /*
+            restServer = new RestServer(config.serverUrl);
+
             var client = new RestClient();
             client.BaseUrl = config.serverUrl;
 
             var request = new RestRequest();
             request.Resource = "devices";
-            */
 
-            /* var response = client.Execute(request);
+            var response = client.Execute(request);
 
-             if (response.ErrorException != null)
-             {
-                 const string message = "Error retrieving response.  Check inner details for more info.";
-                 throw new ApplicationException(message, response.ErrorException);
-             }
+            if (response.ErrorException != null)
+            {
+                const string message = "Error retrieving response.  Check inner details for more info.";
+                throw new ApplicationException(message, response.ErrorException);
+            }
 
-             var devicesFromServer = JsonConvert.DeserializeObject<List<Device>>(response.Content);
+            var devicesFromServer = JsonConvert.DeserializeObject<List<Device>>(response.Content);
 
-             Console.WriteLine(devicesFromServer.Count);
+            Console.WriteLine(devicesFromServer.Count);
 
-             foreach (var device in devices)
-             {
-                 Console.WriteLine(JsonConvert.SerializeObject(device, Formatting.Indented));
-             }
+            foreach (var device in devices.Values.ToList())
+            {
+                Console.WriteLine(JsonConvert.SerializeObject(device, Formatting.Indented));
+            }
 
-             for (int i = 1; i < 0x20; i++)
-             {
-                 var remoteDevice = devicesFromServer.Find(x => x.deviceID == i);
-                 var localDevice = devices[i];
+            for (byte i = 1; i < 0x20; i++)
+            {
+                var remoteDevice = devicesFromServer.Find(x => x.deviceID == i) ?? null;
 
-                 if (remoteDevice == null && localDevice != null)
-                 {
-                     // POST device to server
-                 }
-                 else if (remoteDevice != null && localDevice != null)
-                 {
-                     // PUT device from server
-                 }
-                 else if (remoteDevice != null && localDevice == null)
-                 {
-                     // DELETE device from server
-                 }
-             } */
+                Device localDevice = null;
+
+                if (devices.ContainsKey(i))
+                {
+                    localDevice = devices[i];
+                }
+                
+
+                if (remoteDevice == null && localDevice != null)
+                {
+                    Console.WriteLine($"Posted local device {i} to server");
+
+                    var postRequest = new RestRequest($"devices/", Method.POST);
+                    postRequest.AddHeader("Accept", "application/json");
+                    postRequest.Parameters.Clear();
+                    postRequest.AddParameter("application/json", JsonConvert.SerializeObject(localDevice), ParameterType.RequestBody);
+
+                    Console.WriteLine( client.Execute(postRequest).StatusCode );
+                }
+                else if (remoteDevice != null && localDevice != null)
+                {
+                    Console.WriteLine($"Device with id {i} on server and locally. Putting local device to server");
+
+                    var putRequest = new RestRequest($"devices/{i}", Method.PUT);
+                    putRequest.AddHeader("Accept", "application/json");
+                    putRequest.Parameters.Clear();
+                    putRequest.AddParameter("application/json", JsonConvert.SerializeObject(localDevice), ParameterType.RequestBody);
+
+                    Console.WriteLine( client.Execute(putRequest).StatusCode );
+                }
+                else if (remoteDevice != null && localDevice == null)
+                {
+                    Console.WriteLine($"Device with id {i} on server but not locally. Deleting from server");
+
+                    var deleteRequest = new RestRequest($"devices/{i}", Method.DELETE);
+                    Console.WriteLine( client.Execute(deleteRequest).StatusCode );
+                }
+            }
+            
+            var wssv = new WebSocketServer(8010);
+            wssv.AddWebSocketService<WebSocket>("/");
+
+            wssv.Start();
+            Console.WriteLine($"Started WebSocket server on port {wssv.Port}");
+
+            var quitting = false;
+            while(true)
+            {
+                var cki = Console.ReadKey();
+                
+                if (cki.Key == ConsoleKey.Q || quitting)
+                {
+                    if (!quitting)
+                    {
+                        Console.Write("\nAre you sure you want to quit? (y/n): ");
+
+                        quitting = true;
+                    }
+                    
+                    if (cki.Key == ConsoleKey.Y)
+                    {
+                        Console.WriteLine();
+                        break;
+                    }
+                    else if (cki.Key == ConsoleKey.N)
+                    {
+                        quitting = false;
+                    }
+                }
+                    
+            }
 
             serialPort.Close();
             Message.rwPinConnection.Close();
-
-            Console.Write("Enter to end program...");
-            Console.ReadLine();
+            wssv.Stop();
         }
     }
 }

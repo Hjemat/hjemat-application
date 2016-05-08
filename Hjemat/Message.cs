@@ -12,7 +12,7 @@ namespace Hjemat
 
         public static SerialPort serialPort;
 
-        public static byte CreateHeader(byte deviceID, Command command)
+        public static byte CreateHeader(byte deviceID, CommandID command)
         {
             var commandID = (int)command;
 
@@ -24,7 +24,7 @@ namespace Hjemat
 
         public static Message CreatePing(byte deviceID)
         {
-            return new Message(deviceID, Command.Ping, new byte?[3] { 0, 0, 0 });
+            return new Message(deviceID, CommandID.Ping, new byte?[3] { 0, 0, 0 });
         }
 
         public byte[] bytes = new byte[4];
@@ -37,7 +37,7 @@ namespace Hjemat
             }
         }
 
-        public Message(byte deviceID, Command command, byte?[] bytes)
+        public Message(byte deviceID, CommandID command, byte?[] bytes)
         {
             this.bytes[0] = Message.CreateHeader(deviceID, command);
 
@@ -52,10 +52,10 @@ namespace Hjemat
             return (byte)(bytes[0] >> 3);
         }
 
-        public Command GetCommand()
+        public CommandID GetCommand()
         {
             // 7 = 00000111 bin
-            return (Command)(bytes[0] & 7);
+            return (CommandID)(bytes[0] & 7);
         }
         
         public byte GetHeader()
