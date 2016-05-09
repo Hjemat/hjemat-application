@@ -72,6 +72,8 @@
     <Compile Include="Product.cs" />
     <Compile Include="Websocket.cs" />
     <Compile Include="RestServer.cs" />
+    <Compile Include="CommandID.cs" />
+    <Compile Include="Config.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

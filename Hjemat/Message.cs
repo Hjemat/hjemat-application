@@ -21,10 +21,35 @@ namespace Hjemat
 
             return (byte)header;
         }
+        
+        public static byte CreateHeader(byte deviceID, CommandIDPair command)
+        {
+            var commandID = (int)command;
+
+            var header = deviceID << 3;
+            header = header | commandID;
+
+            return (byte)header;
+        }
 
         public static Message CreatePing(byte deviceID)
         {
             return new Message(deviceID, CommandID.Ping, new byte?[3] { 0, 0, 0 });
+        }
+        
+        public static Message CreatePairAllow()
+        {
+            return new Message(0, CommandIDPair.Allow, new byte?[3] { 0, 0, 0 });
+        }
+        
+        public static Message CreatePairReturn(byte deviceID)
+        {
+            return new Message(0, CommandIDPair.Allow, new byte?[3] { deviceID, 0, 0 });
+        }
+        
+        public static Message CreatePairStop()
+        {
+            return new Message(0, CommandIDPair.Stop, new byte?[3] { 0, 0, 0 });
         }
 
         public byte[] bytes = new byte[4];
@@ -46,10 +71,25 @@ namespace Hjemat
                 this.bytes[i] = bytes?[i - 1] ?? 0;
             }
         }
+        
+        public Message(byte deviceID, CommandIDPair command, byte?[] bytes)
+        {
+            this.bytes[0] = Message.CreateHeader(deviceID, command);
+
+            for (int i = 1; i < 4; i++)
+            {
+                this.bytes[i] = bytes?[i - 1] ?? 0;
+            }
+        }
 
         public byte GetDeviceID()
         {
             return (byte)(bytes[0] >> 3);
+        }
+        
+        public int GetProductID()
+        {
+            return BitConverter.ToInt32(new byte[] { bytes[3], bytes[2], bytes[1] }, 0);
         }
 
         public CommandID GetCommand()

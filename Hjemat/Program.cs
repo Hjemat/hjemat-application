@@ -12,44 +12,7 @@ using System.Linq;
 
 namespace Hjemat
 {
-    public enum CommandID
-    {
-        Error = 0,
-        Ping = 1,
-        Pingback = 2,
-        Get = 3,
-        Set = 4,
-        Return = 5,
-    }
-
-    class Config
-    {
-        public class SerialConfig
-        {
-            public string portName = "COM3";
-            public int baudRate = 9600;
-            public Parity parity = Parity.Odd;
-            public StopBits stopBits = StopBits.One;
-            public int dataBits = 8;
-            public Handshake handshake = Handshake.None;
-            public int readTimeout = 2000;
-
-            public SerialConfig(string portName)
-            {
-                this.portName = portName;
-            }
-        }
-
-        public Uri serverUrl;
-        public SerialConfig serialConfig;
-
-        public Config(Uri serverUrl, SerialConfig serialConfig)
-        {
-            this.serverUrl = serverUrl;
-            this.serialConfig = serialConfig;
-        }
-
-    }
+    
 
     class Program
     {
@@ -221,12 +184,7 @@ namespace Hjemat
                 }
                 else
                 {
-                    device.values = new Dictionary<byte, short>();
-
-                    foreach (var productValue in product.values)
-                    {
-                        device.values.Add(productValue.id, device.GetValue(productValue.id));
-                    }
+                    device.SetupValues(product);
 
                     Console.WriteLine($"Device {device.deviceID}, a {product.name}, has been set up");
                 }
@@ -246,6 +204,36 @@ namespace Hjemat
             delayStopwatch.Stop();*/
 
             System.Threading.Thread.Sleep(miliseconds);
+        }
+        
+        public static void Loop()
+        {
+            var quitting = false;
+            while(true)
+            {
+                var cki = Console.ReadKey();
+                
+                if (cki.Key == ConsoleKey.Q || quitting)
+                {
+                    if (!quitting)
+                    {
+                        Console.Write("\nAre you sure you want to quit? (y/n): ");
+
+                        quitting = true;
+                    }
+                    
+                    if (cki.Key == ConsoleKey.Y)
+                    {
+                        Console.WriteLine();
+                        break;
+                    }
+                    else if (cki.Key == ConsoleKey.N)
+                    {
+                        quitting = false;
+                    }
+                }
+                    
+            }
         }
 
 
@@ -290,7 +278,9 @@ namespace Hjemat
                 return;
             }
 
-            SetupSerialPort(config.serialConfig);
+            serialPort = config.CreateSerialPort();
+            Message.serialPort = serialPort;
+            Device.serialPort = serialPort;
 
             try
             {
@@ -317,104 +307,14 @@ namespace Hjemat
 
             restServer = new RestServer(config.serverUrl);
 
-            var client = new RestClient();
-            client.BaseUrl = config.serverUrl;
+            restServer.SynchronizeDevices(devices);
 
-            var request = new RestRequest();
-            request.Resource = "devices";
-
-            var response = client.Execute(request);
-
-            if (response.ErrorException != null)
-            {
-                const string message = "Error retrieving response.  Check inner details for more info.";
-                throw new ApplicationException(message, response.ErrorException);
-            }
-
-            var devicesFromServer = JsonConvert.DeserializeObject<List<Device>>(response.Content);
-
-            Console.WriteLine(devicesFromServer.Count);
-
-            foreach (var device in devices.Values.ToList())
-            {
-                Console.WriteLine(JsonConvert.SerializeObject(device, Formatting.Indented));
-            }
-
-            for (byte i = 1; i < 0x20; i++)
-            {
-                var remoteDevice = devicesFromServer.Find(x => x.deviceID == i) ?? null;
-
-                Device localDevice = null;
-
-                if (devices.ContainsKey(i))
-                {
-                    localDevice = devices[i];
-                }
-                
-
-                if (remoteDevice == null && localDevice != null)
-                {
-                    Console.WriteLine($"Posted local device {i} to server");
-
-                    var postRequest = new RestRequest($"devices/", Method.POST);
-                    postRequest.AddHeader("Accept", "application/json");
-                    postRequest.Parameters.Clear();
-                    postRequest.AddParameter("application/json", JsonConvert.SerializeObject(localDevice), ParameterType.RequestBody);
-
-                    Console.WriteLine( client.Execute(postRequest).StatusCode );
-                }
-                else if (remoteDevice != null && localDevice != null)
-                {
-                    Console.WriteLine($"Device with id {i} on server and locally. Putting local device to server");
-
-                    var putRequest = new RestRequest($"devices/{i}", Method.PUT);
-                    putRequest.AddHeader("Accept", "application/json");
-                    putRequest.Parameters.Clear();
-                    putRequest.AddParameter("application/json", JsonConvert.SerializeObject(localDevice), ParameterType.RequestBody);
-
-                    Console.WriteLine( client.Execute(putRequest).StatusCode );
-                }
-                else if (remoteDevice != null && localDevice == null)
-                {
-                    Console.WriteLine($"Device with id {i} on server but not locally. Deleting from server");
-
-                    var deleteRequest = new RestRequest($"devices/{i}", Method.DELETE);
-                    Console.WriteLine( client.Execute(deleteRequest).StatusCode );
-                }
-            }
-            
-            var wssv = new WebSocketServer(8010);
-            wssv.AddWebSocketService<WebSocket>("/");
+            var wssv = WebSocket.CreateServer();
 
             wssv.Start();
             Console.WriteLine($"Started WebSocket server on port {wssv.Port}");
 
-            var quitting = false;
-            while(true)
-            {
-                var cki = Console.ReadKey();
-                
-                if (cki.Key == ConsoleKey.Q || quitting)
-                {
-                    if (!quitting)
-                    {
-                        Console.Write("\nAre you sure you want to quit? (y/n): ");
-
-                        quitting = true;
-                    }
-                    
-                    if (cki.Key == ConsoleKey.Y)
-                    {
-                        Console.WriteLine();
-                        break;
-                    }
-                    else if (cki.Key == ConsoleKey.N)
-                    {
-                        quitting = false;
-                    }
-                }
-                    
-            }
+            Loop();
 
             serialPort.Close();
             Message.rwPinConnection.Close();

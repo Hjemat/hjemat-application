@@ -16,7 +16,7 @@ namespace Hjemat
         {
             this.deviceID = deviceID;
             this.productID = productID;
-           
+
             this.values = values ?? new Dictionary<byte, Int16>();
         }
 
@@ -47,7 +47,7 @@ namespace Hjemat
 
             return SendMessage(command, dataBytes[2], dataBytes[1], dataBytes[0]);
         }
-        
+
         public short GetValue(byte dataID)
         {
             SendMessage(CommandID.Get, dataID, 0);
@@ -63,53 +63,63 @@ namespace Hjemat
 
             throw new System.Exception("");
         }
-/*
-        public bool SendData(byte dataID, int data)
+
+        public void SetupValues(Product product)
         {
-            SendMessage(Command.Set, dataID, data);
+            this.values = new Dictionary<byte, short>();
 
-            byte[] confirmationMessage = new byte[4];
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
-
-            bool reading = true;
-            int messageIndex = 0;
-
-            while (reading)
+            foreach (var productValue in product.values)
             {
-                var numBytes = serialPort.BytesToRead;
-                if (numBytes < 1)
-                    continue;
-
-                serialPort.Read(confirmationMessage, messageIndex, numBytes);
-                messageIndex += numBytes;
-
-                if (messageIndex >= 3)
-                {
-                    reading = false;
-                }
-            }
-
-            var expectedHeader = Message.CreateHeader(deviceID, Command.Return);
-
-            if (confirmationMessage[0] == expectedHeader)
-            {
-                Console.WriteLine("Data confirmed received");
-                return true;
-            }
-            else
-            {
-                Console.WriteLine("No confirmation of reception");
-                foreach (var part in confirmationMessage)
-                {
-                    Console.Write(part);
-                    Console.Write(" ");
-                }
-                Console.WriteLine("");
-
-                return false;
+                this.values.Add(productValue.id, this.GetValue(productValue.id));
             }
         }
-        */
+        /*
+                public bool SendData(byte dataID, int data)
+                {
+                    SendMessage(Command.Set, dataID, data);
+
+                    byte[] confirmationMessage = new byte[4];
+                    Stopwatch stopwatch = new Stopwatch();
+                    stopwatch.Start();
+
+                    bool reading = true;
+                    int messageIndex = 0;
+
+                    while (reading)
+                    {
+                        var numBytes = serialPort.BytesToRead;
+                        if (numBytes < 1)
+                            continue;
+
+                        serialPort.Read(confirmationMessage, messageIndex, numBytes);
+                        messageIndex += numBytes;
+
+                        if (messageIndex >= 3)
+                        {
+                            reading = false;
+                        }
+                    }
+
+                    var expectedHeader = Message.CreateHeader(deviceID, Command.Return);
+
+                    if (confirmationMessage[0] == expectedHeader)
+                    {
+                        Console.WriteLine("Data confirmed received");
+                        return true;
+                    }
+                    else
+                    {
+                        Console.WriteLine("No confirmation of reception");
+                        foreach (var part in confirmationMessage)
+                        {
+                            Console.Write(part);
+                            Console.Write(" ");
+                        }
+                        Console.WriteLine("");
+
+                        return false;
+                    }
+                }
+                */
     }
 }
