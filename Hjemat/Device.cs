@@ -52,16 +52,26 @@ namespace Hjemat
         {
             SendMessage(CommandID.Get, dataID, 0);
 
-            var response = Message.Read();
-
-            var expectedHeader = Message.CreateHeader(deviceID, CommandID.Return);
-
-            if (response.GetHeader() == expectedHeader && response.bytes[1] == dataID)
+            try
             {
-                return response.GetShortData();
+                var response = Message.Read();
+
+                var expectedHeader = Message.CreateHeader(deviceID, CommandID.Return);
+
+                if (response.GetHeader() == expectedHeader && response.bytes[1] == dataID)
+                {
+                    return response.GetShortData();
+                }
+
+                throw new System.Exception($"Unexpected header {response.GetHeader().ToString()}");
+            }
+            catch (System.TimeoutException) {
+                Console.WriteLine("Something took a little too long");
+                return 0;
             }
 
-            throw new System.Exception("");
+
+
         }
 
         public void SetupValues(Product product)

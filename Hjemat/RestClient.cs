@@ -7,20 +7,20 @@ using WebSocketSharp.Net;
 
 namespace Hjemat
 {
-    public class RestServer
+    public class RestManager
     {
-        public static RestServer Instance
+        public static RestManager Instance
         {
             get {
                 return instance;
             }
         }
         
-        static RestServer instance;
+        static RestManager instance;
 
         private RestClient _client;
 
-        public RestServer(Uri url)
+        public RestManager(Uri url)
         {
             _client = new RestClient(url);
             instance = this;

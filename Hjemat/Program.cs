@@ -12,40 +12,20 @@ using System.Linq;
 
 namespace Hjemat
 {
-    
-
     class Program
     {
         int updateInterval = 1;
         static SerialPort serialPort = new SerialPort();
         static Config config = new Config(new Uri("http://127.0.0.1/api/"), new Config.SerialConfig("COM3"));
 
-        static Dictionary<byte, Device> devices = new Dictionary<byte, Device>();
-        static Dictionary<int, Product> products = new Dictionary<int, Product>();
-
         static string configFolderPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "hjemat-app");
 
         static RestServer restServer;
-
-        //public static List<Command> commands = new List<Command>();
-
-        public static Dictionary<byte, Device> Devices { get; } = devices;
-
-        static void SetupSerialPort(Config.SerialConfig serialConfig)
-        {
-            serialPort.PortName = serialConfig.portName;
-            serialPort.BaudRate = serialConfig.baudRate;
-            serialPort.Parity = serialConfig.parity;
-            serialPort.StopBits = serialConfig.stopBits;
-            serialPort.DataBits = serialConfig.dataBits;
-            serialPort.Handshake = serialConfig.handshake;
-            serialPort.ReadTimeout = serialConfig.readTimeout;
-
-            Message.serialPort = serialPort;
-            Device.serialPort = serialPort;
-        }
+        
+        static bool isRunning = false;
+        static bool isQuitting = false;
 
         static Config LoadSettings(string settingsPath = null)
         {
@@ -118,207 +98,128 @@ namespace Hjemat
             return products;
         }
 
-        static void ScanForDevices()
-        {
-            for (byte i = 0x01; i <= 0x20; i++)
-            {
-                Console.Write($"\rScanning for devices... {i}/32");
-
-                serialPort.DiscardInBuffer();
-                serialPort.DiscardOutBuffer();
-
-                var ping = Message.CreatePing(i);
-                ping.Send();
-
-                try
-                {
-                    var response = Message.Read();
-
-                    if (response.GetHeader() == Message.CreateHeader(i, CommandID.Pingback))
-                    {
-                        var productID = response.GetDataBytes();
-                        productID = new byte[] { productID[2], productID[1], productID[0], 0 };
-
-                        var device = new Device(i, BitConverter.ToInt32(productID, 0));
-                        devices.Add(device.deviceID, device);
-
-                        Console.WriteLine($"\rFound device with ID {device.deviceID} and product ID {device.productID}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Got message {response.GetHeader()}");
-                    }
-                }
-                catch (System.TimeoutException)
-                {
-                    continue;
-                }
-
-
-            }
-
-            Console.WriteLine("\n");
-
-            foreach (var device in devices.Values)
-            {
-                Console.WriteLine($"Found device with ID {device.deviceID} and product ID {device.productID}");
-            }
-        }
-
-        static void SetupDevices()
-        {
-            foreach (var device in devices.Values)
-            {
-                Product product = null;
-
-                if (products.ContainsKey(device.productID))
-                {
-                    product = products[device.productID];
-                }
-
-                if (product == null)
-                {
-                    //TODO: Update product list if not already done, and check for product again
-
-                    Console.WriteLine($"Couldn't find product of device {device.deviceID}, product id: {device.productID}");
-                }
-                else
-                {
-                    device.SetupValues(product);
-
-                    Console.WriteLine($"Device {device.deviceID}, a {product.name}, has been set up");
-                }
-            }
-
-        }
-
-        static Stopwatch delayStopwatch = new Stopwatch();
-
         public static void Delay(int miliseconds)
         {
-            /*delayStopwatch.Start();
-            while (delayStopwatch.ElapsedMilliseconds < miliseconds)
-            {
-                continue;
-            }
-            delayStopwatch.Stop();*/
-
             System.Threading.Thread.Sleep(miliseconds);
         }
-        
+
         public static void Loop()
         {
-            var quitting = false;
-            while(true)
-            {
-                var cki = Console.ReadKey();
-                
-                if (cki.Key == ConsoleKey.Q || quitting)
-                {
-                    if (!quitting)
-                    {
-                        Console.Write("\nAre you sure you want to quit? (y/n): ");
+            var cki = Console.ReadKey();
 
-                        quitting = true;
-                    }
-                    
-                    if (cki.Key == ConsoleKey.Y)
-                    {
-                        Console.WriteLine();
-                        break;
-                    }
-                    else if (cki.Key == ConsoleKey.N)
-                    {
-                        quitting = false;
-                    }
+            if (cki.Key == ConsoleKey.Q || isQuitting)
+            {
+                if (!isQuitting)
+                {
+                    Console.Write("\nAre you sure you want to quit? (y/n): ");
+
+                    isQuitting = true;
                 }
-                    
+
+                if (cki.Key == ConsoleKey.Y)
+                {
+                    Console.WriteLine();
+                    isRunning = false;
+                }
+                else if (cki.Key == ConsoleKey.N)
+                {
+                    isQuitting = false;
+                }
             }
         }
 
 
         static void Main(string[] args)
         {
-            for (int i = 0; i < args.Length; i++)
-            {
-                Console.WriteLine("Arg[{0}] = [{1}]", i, args[i]);
-            }
-
+            // Initializing Pin 11 which is the pin we are using to switch between read and write on the RS486 IC
             Message.rwPinConfig = ConnectorPin.P1Pin11.Output();
             Message.rwPinConnection = new GpioConnection(Message.rwPinConfig);
 
+            // Getting path to folder with settings from 
             configFolderPath = args[0];
 
-            //Message.rwPinConnection.Toggle(Message.rwPinConfig);
+            // We create the path if it doesn't exists.
+            if (!File.Exists(configFolderPath))
+                Directory.CreateDirectory(args[0] ?? configFolderPath);
 
-            try
-            {
-                if (!File.Exists(configFolderPath))
-                    Directory.CreateDirectory(args[0] ?? configFolderPath);
+            // Loading settings from the settings file in the config path
+            config = LoadSettings(configFolderPath);
 
-                config = LoadSettings(args[0]);
-            }
-            catch (System.Exception)
-            {
-                return;
-            }
-
-            products = GetProductsDict();
-            Console.WriteLine(JsonConvert.SerializeObject(products, Formatting.Indented));
-
+            // If we failed to load the settings, we tell the user and exits
             if (config == null)
             {
                 Console.WriteLine("Failed to load settings file");
                 return;
             }
 
+            // If the serial config in the settings are invalid we tell the user and exits
             if (config.serialConfig == null)
             {
                 Console.WriteLine("Error getting SerialConfig from settings");
                 return;
             }
 
+            Console.WriteLine("Loaded settings");
+
+            // Loads the products from the products file
+            ProductsManager.products = GetProductsDict();
+
+            // Sets up the serial port according to the settings file
+            // The serial port is what we use to communicate with RS485
             serialPort = config.CreateSerialPort();
             Message.serialPort = serialPort;
             Device.serialPort = serialPort;
 
+            // Opens the serial port so we can use it.
+            // If it fails to open the program exits and the error is shown to ther user.
             try
             {
                 serialPort.Open();
             }
-            catch (System.Exception)
+            catch (System.Exception exp)
             {
                 Console.WriteLine($"Error opening serial port. Make sure device is connected and that {serialPort.PortName} is the correct port");
+
+                Console.WriteLine($"Error message: {exp.Message}");
 
                 return;
             }
 
             Console.WriteLine("Giving port time to open...");
-            var stopwatch = new Stopwatch();
-
-            var testWatch = new Stopwatch();
             Delay(400);
 
             Console.WriteLine("");
 
-            ScanForDevices();
+            // Tries to ping all device ids, so we can find devices which already has been assigned an id
+            DevicesManager.ScanDevices();
 
-            SetupDevices();
+            // Gets values from devices
+            DevicesManager.UpdateDevicesValues();
 
-            restServer = new RestServer(config.serverUrl);
+            // Sets up connection to the database
+            var restManager = new RestManager(config.serverUrl);
 
-            restServer.SynchronizeDevices(devices);
+            // Synchronize devices with the database
+            restManager.SynchronizeDevices(DevicesManager.devices);
 
+            // Starts the WebSocket server
             var wssv = WebSocket.CreateServer();
-
             wssv.Start();
             Console.WriteLine($"Started WebSocket server on port {wssv.Port}");
 
-            Loop();
+            // Prepares for sending device data over WebSocket when devices are paired
+            DevicesManager.OnDevicePaired += WebSocket.SendDevice;
 
+            // Infinite loop to keep the program running, until isRunning is set to false
+            while (isRunning)
+            {
+                Loop();
+            }
+
+            // Closes serial port, pin connection and websocket to clean up
+            wssv.Stop();
             serialPort.Close();
             Message.rwPinConnection.Close();
-            wssv.Stop();
         }
     }
 }

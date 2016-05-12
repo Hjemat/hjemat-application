@@ -74,6 +74,8 @@
     <Compile Include="RestServer.cs" />
     <Compile Include="CommandID.cs" />
     <Compile Include="Config.cs" />
+    <Compile Include="DevicesManager.cs" />
+    <Compile Include="ProductsManager.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

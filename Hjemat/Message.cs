@@ -44,7 +44,7 @@ namespace Hjemat
         
         public static Message CreatePairReturn(byte deviceID)
         {
-            return new Message(0, CommandIDPair.Allow, new byte?[3] { deviceID, 0, 0 });
+            return new Message(0, CommandIDPair.Return, new byte?[3] { deviceID, 0, 0 });
         }
         
         public static Message CreatePairStop()
@@ -89,7 +89,8 @@ namespace Hjemat
         
         public int GetProductID()
         {
-            return BitConverter.ToInt32(new byte[] { bytes[3], bytes[2], bytes[1] }, 0);
+            Byte[]  array = { bytes[3], bytes[2], bytes[1], 0x00 };
+            return BitConverter.ToInt32(array, 0);
         }
 
         public CommandID GetCommand()
@@ -115,6 +116,9 @@ namespace Hjemat
 
         public static bool Send(byte[] bytes)
         {
+            serialPort.DiscardInBuffer();
+            serialPort.DiscardOutBuffer();
+            
             rwPinConnection.Toggle(rwPinConfig);
             Program.Delay(5);
 
