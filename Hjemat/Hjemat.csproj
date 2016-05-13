@@ -71,7 +71,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Product.cs" />
     <Compile Include="Websocket.cs" />
-    <Compile Include="RestServer.cs" />
+    <Compile Include="RestManager.cs" />
     <Compile Include="CommandID.cs" />
     <Compile Include="Config.cs" />
     <Compile Include="DevicesManager.cs" />

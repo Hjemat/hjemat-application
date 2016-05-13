@@ -36,7 +36,7 @@ namespace Hjemat
 
             pairingThread.Join();
 
-            RestServer.Instance.SynchronizeDevices(devices);
+            RestManager.Instance.SynchronizeDevices(devices);
 
             var message = Message.CreatePairStop();
             message.Send();

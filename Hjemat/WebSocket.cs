@@ -48,7 +48,7 @@ namespace Hjemat
                 device.values[valueID] = value;
 
                 Console.WriteLine("Updating device on Rest server");
-                RestServer.Instance.SendDevice(device);
+                RestManager.Instance.SendDevice(device);
             }
             else if (message["commandType"] == 3)
             {
@@ -73,7 +73,7 @@ namespace Hjemat
                 device.values[valueID] = value;
 
                 Console.WriteLine("Updating device on Rest server");
-                RestServer.Instance.SendDevice(device);
+                RestManager.Instance.SendDevice(device);
                 
                 message.Add("value", value);
 
@@ -119,7 +119,7 @@ namespace Hjemat
 
                 DevicesManager.UpdateDevicesValues();
 
-                RestServer.Instance.SynchronizeDevices( DevicesManager.devices );
+                RestManager.Instance.SynchronizeDevices( DevicesManager.devices );
 
                 message["confirmation"] = 1;
                 Send(JsonConvert.SerializeObject(message));
