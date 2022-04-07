@@ -22,7 +22,7 @@ If the program for some reason doesn't write or read from the port properly, you
 
 ------------------
 Made by
-Mads Grau Kristensen
+Signe Rhea Grau Kristensen
 Morten Nissen
 
 For our electronics exam in Teksnik Gymnasium Sønderborg, May 2016
